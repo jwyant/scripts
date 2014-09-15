@@ -41,6 +41,9 @@ def ignore = tryQuietly{ ignore } ?: null
 def minFileSize = tryQuietly{ minFileSize.toLong() }; if (minFileSize == null) { minFileSize = 50 * 1000L * 1000L }
 def minLengthMS = tryQuietly{ minLengthMS.toLong() }; if (minLengthMS == null) { minLengthMS = 10 * 60 * 1000L }
 
+// user-defined show mapping
+def fileMappings = tryQuietly{ csv(mapfile) }
+
 // series/anime/movie format expressions
 def format = [
 	tvs:   tryQuietly{ seriesFormat } ?: '''TV Shows/{n}/{episode.special ? 'Special' : 'Season '+s.pad(2)}/{n} - {episode.special ? 'S00E'+special.pad(2) : s00e00} - {t.replaceAll(/[`´‘’ʻ]/, /'/).replaceAll(/[!?.]+$/).replacePart(', Part $1')}{'.'+lang}''',
@@ -325,7 +328,12 @@ groups.each{ group, files ->
 		// choose series / anime config
 		def config = group.tvs ? [name:group.tvs,   format:format.tvs,   db:'TheTVDB']
 		                       : [name:group.anime, format:format.anime, db:'AniDB']
-		def dest = rename(file: files, format: config.format, db: config.db)
+		def dest = null
+                fileMappings.each{ fileMapping, showMapping ->
+                        if (dest == null) { dest = rename(file: files.findAll{ it =~ /(?i:\/${fileMapping})/}, query: "${showMapping}", format: config.format, db: config.db) }
+                }
+                // if it's still null (we've exhausted all exceptions, just do a normal match
+                if (dest == null) { dest = rename(file: files, format: config.format, db: config.db) }
 		if (dest && artwork) {
 			dest.mapByFolder().each{ dir, fs ->
 				def hasSeasonFolder = (config.format =~ /(?i)Season/)
